@@ -270,7 +270,43 @@ class TwitterImpl extends TwitterBaseImpl implements Twitter {
                 , new HttpParameter("media", fileName, image)).asJSONObject());
     }
 
-	@Override
+    @Override
+    public UploadedMedia uploadMediaChunked(String fileName, InputStream inputStream, int length) throws TwitterException{
+        try {
+            UploadedMedia uploadedMedia = uploadMediaChunkedInit(length);
+
+            byte[] segment = new byte[CHUNK_SIZE];
+            int segmentUsed;
+
+            for(int segmentIndex = 0; true; segmentIndex++) {
+                segmentUsed = 0;
+                int bytesRead;
+                while((bytesRead = inputStream.read(segment, segmentUsed, segment.length - segmentUsed)) > 0) {
+                    segmentUsed += bytesRead;
+                }
+
+                if(segmentUsed == 0) {
+                    break;
+                }
+
+                InputStream segmentInputStream = new ByteArrayInputStream(segment, 0, segmentUsed);
+                uploadMediaChunkedAppend(fileName, segmentInputStream, segmentIndex, uploadedMedia.getMediaId());
+                if(bytesRead == -1) {
+                    break;
+                }
+            }
+
+            return uploadMediaChunkedFinalize(uploadedMedia.getMediaId());
+        } catch (Exception e) {
+            throw new TwitterException(e);
+        } finally {
+            try {
+                inputStream.close();
+            } catch(IOException e) {}
+        }
+    }
+
+    @Override
 	public UploadedMedia uploadMediaChunked(String fileName, InputStream media) throws TwitterException {
 		//If the InputStream is remote, this is will download it into memory speeding up the chunked upload process 
 		byte[] dataBytes = null;
